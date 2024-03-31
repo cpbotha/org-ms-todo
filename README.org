@@ -1,0 +1,25 @@
+* Related
+
+- https://github.com/telotortium/emacs-oauth2-auto
+- https://blog.laurentcharignon.com/post/creating-microsoft-todos-from-org/
+
+
+* Notes
+
+** Public apps can't send client secret
+
+Seems we should NOT be sending client secret for this public app: https://stackoverflow.com/questions/38786249/error-public-clients-cant-send-a-client-secret-while-try-to-get-access-token-i
+
+** userAudience / signinAudience
+
+#+begin_example
+Error invalid_request: The request is not valid for the application's 'userAudience' configuration. In order to use /common/ endpoint, the application must not be configured with 'Consumer' as the user audience. The userAudience should be configured with 'All' to use /common/ endpoint.
+#+end_example
+
+To fix this, edit manifest (see screenshot) and change:
+
+#+begin_src json
+  "signInAudience": "AzureADandPersonalMicrosoftAccount",
+#+end_src
+
+See https://stackoverflow.com/questions/63924098/is4-request-not-valid-for-the-applications-useraudience-configuration
