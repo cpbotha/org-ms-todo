@@ -215,8 +215,11 @@ If ORG-TIMESTAMP is nil, return nil. "
             (when (string= (plist-get ms-task :status) "completed")
               ;; change org-task to done
               (message "Queueing update of org task with ID %s to DONE" id)
-              ;; need org-id, but also completedDateTime
-              (append org-ms-todo--queue-done (list id))
+              ;; convert completedDateTime dateTime (iso formatted) to org timestamp
+              ;; :completedDateTime (:dateTime "2024-03-21T22:00:00.0000000" :timeZone "UTC")
+              ;; FIXME: we assume that :timeZone is UTC, and as if that was not bad enough, we actually just ignore it and use the time as is
+              ;; store both org-id and completed timestamp in the queue
+              (push `(,id ,(org-timestamp-from-time (parse-iso8601-time-string (plist-get (plist-get ms-task :completedDateTime) :dateTime)) t t)) org-ms-todo--queue-done)
 
 
               )
@@ -248,3 +251,10 @@ If ORG-TIMESTAMP is nil, return nil. "
 (setq org-ms-todo--queue-done nil)
 
 (org-ms-todo--handle-org-task (car org-tasks))
+
+;; NEXT:
+;; https://github.com/alphapapa/org-ql/blob/master/examples.org#set-tags-on-certain-entries
+(org-ql-select (org-agenda-files) '(and (property "ID")
+                                        (or (todo) (done))
+                                        (string-match  "F2997669-5478-4D72-BA52-4A36F3305773" (org-entry-get (point) "ID"))))
+
