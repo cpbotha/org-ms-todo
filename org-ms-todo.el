@@ -49,14 +49,12 @@
          )))
 
 ;; this will give you just the access-token 
-(setq ms-auth (oauth2-auto-access-token-sync "cpbotha@vxlabs.com" 'microsoft-todo))
+(setq access-token (oauth2-auto-access-token-sync "cpbotha@vxlabs.com" 'microsoft-todo))
 
 ;; if you also want the refresh-token, use the following instead:
 ;;(setq ms-auth (oauth2-auto-plist-sync "cpbotha@vxlabs.com" 'microsoft-todo))
 ;; get :access-token from ms-auth
 ;;(setq access-token (plist-get ms-auth :access-token))
-
-
 
 
 ;; example from the docs to create new task:
@@ -86,20 +84,26 @@
 (setq emacs-list-id  "AQMkADAwATM3ZmYAZS0wMjRiLTg5YTQtMDACLTAwCgAuAAADJ6bSE4UnyEaAs4sDMsoQdgEAd96ZmABYYkKEE5goOL-SRQAGhuyhVAAAAA==")
 
 ;; create a new task inside the emacs list
-(defun org-ms-todo--ms-create-task (list-id title org-id due-datetime due-timezone)
-  (setq create-data-json (json-encode `(("title" . ,title)
-                                        ;; :dueDateTime (:dateTime 2024-04-01T22:00:00.0000000 :timeZone UTC) 
-                                        ,(when due-datetime `("dueDateTime" . ((dateTime . ,due-datetime) (timeZone . ,due-timezone ))))
-                                        ("linkedResources" . ,(list `(("applicationName" . "Emacs Orgmode") 
-                                                                      ;; add org-protocol link here as well, because to-do web-app does not link or even reveal the webUrl
-                                                                      ("displayName" . ,(format "org-protocol://org-id?id=%s" org-id))
-                                                                      ("externalId" . ,org-id)
-                                                                      ("webUrl" . ,(format "org-protocol://org-id?id=%s" org-id))
-                                                                      )))
-                                        )))
-  (message "%s" create-data-json)
+(defun org-ms-todo--ms-create-task (ms-list-id title org-id due-datetime scheduled-datetime timezone)
+  (setq create-data-json (json-encode
+                          ;; use append so that optional fields can be nil, and then are completely excluded from the alist
+                          (append
+                           `((title . ,title))
+                           ;; :dueDateTime (:dateTime 2024-04-01T22:00:00.0000000 :timeZone UTC) 
+                           (when due-datetime
+                             `((dueDateTime . ((dateTime . ,due-datetime) (timeZone . ,timezone )))))
+                           (when scheduled-datetime
+                             `((startDateTime . ((dateTime . ,scheduled-datetime) (timeZone . ,timezone )))))
+                           `(("linkedResources" . ,(list `(("applicationName" . "Emacs Orgmode") 
+                                                           ;; add org-protocol link here as well, because to-do web-app does not link or even reveal the webUrl
+                                                           ("displayName" . ,(format "org-protocol://org-id?id=%s" org-id))
+                                                           ("externalId" . ,org-id)
+                                                           ("webUrl" . ,(format "org-protocol://org-id?id=%s" org-id))
+                                                           ))))
+                           nil)))
+  (message "Create task with: %s" create-data-json)
   (request
-    (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" emacs-list-id)
+    (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" ms-list-id)
     :type "POST"
     :headers `(("Content-Type" . "application/json") 
                ("Authorization" . ,(format "Bearer %s" access-token)))
