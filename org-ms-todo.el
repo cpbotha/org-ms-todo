@@ -176,6 +176,15 @@
 ;; - get all org tasks with ID property
 ;; - for each task, ensure there's a corresponding MS task. If not, create.
 
+;; convert org-element timestamp of the form:
+;; (timestamp (:type active :raw-value <2024-03-22 Fri> :year-start 2024 :month-start 3 :day-start 22 :hour-start nil :minute-start nil :year-end 2024 :month-end 3 :day-end 22 :hour-end nil :minute-end nil :begin 12111 :end 12127 :post-blank 0))
+;; ... into iso-format timestamp, in the UTC timezone
+(defun org-ms-todo--org-timestamp-to-iso (org-timestamp)
+  "Convert ORG-TIMESTAMP to iso-format timestamp.
+
+If ORG-TIMESTAMP is nil, return nil. "
+  (when org-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S" (org-timestamp-to-time org-timestamp))))
+
 ;; this task is an org-element
 (defun org-ms-todo--handle-org-task (task-oe)
   (let* ((task (car (cdr task-oe)))
@@ -189,11 +198,14 @@
     (if nil ;;ms-task
         (message "Task with ID %s already exists in MS TODO" id)
       (progn
-        ;; convert org-element timestamp of the form: (timestamp (:type active :raw-value <2024-03-22 Fri> :year-start 2024 :month-start 3 :day-start 22 :hour-start nil :minute-start nil :year-end 2024 :month-end 3 :day-end 22 :hour-end nil :minute-end nil :begin 12111 :end 12127 :post-blank 0)) into iso-format timestamp, in the UTC timezone
+        
         ;;(format-time-string "%Y-%m-%dT%H:%M:%S" (org-timestamp-to-time (plist-get task :DEADLINE)))
 
         ;; https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0
-        (org-ms-todo--ms-create-task emacs-list-id title id (format-time-string "%Y-%m-%dT%H:%M:%S.0000000" (org-timestamp-to-time (plist-get task :deadline))) "Africa/Johannesburg")
+        (org-ms-todo--ms-create-task emacs-list-id title id
+                                     (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
+                                     (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
+                                     "Africa/Johannesburg")
         (message "Create new task with title %s" title))
 
       )))
