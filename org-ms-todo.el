@@ -136,9 +136,9 @@
 (defun org-ms-todo--ms-update-task (ms-list-id ms-task-id status completed-datetime timezone)
   (setq update-data-json (json-encode
                           (append
-                           `(("status" . ,status))
+                           `((status . ,status))
                            ;; :completedDateTime (:dateTime 2024-04-01T22:00:00.0000000 :timeZone UTC) 
-                           (when completed-datetime `(("completedDateTime" . ((dateTime . ,completed-datetime) (timeZone . ,timezone )))))
+                           (when completed-datetime `((completedDateTime . ((dateTime . ,completed-datetime) (timeZone . ,timezone )))))
                            nil)))
   (message "Update task with: %s" create-data-json)
   (request
@@ -167,20 +167,6 @@
               (lambda (&key data &allow-other-keys)
                 (setq ms-tasks (append (plist-get data :value) nil))
                 (message "Got task lists: %S" data)))))
-
-;; test the list-tasks-lists function
-;; this returns a list of alists
-;; note that we're in sync mode, so after this we have the data
-(setq ms-tasks nil)
-(org-ms-todo--ms-list-tasks emacs-list-id)
-
-;; first element of vector
-(message "%s" (car ms-tasks ))
-
-;; get list of org agenda TODOs and DONEs
-;; https://github.com/alphapapa/org-ql/blob/master/examples.org
-;; org-ql-search is interactive
-(setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
 
 (message "%s" (car org-tasks))
 ;; example using org-ql-query
@@ -213,19 +199,52 @@ If ORG-TIMESTAMP is nil, return nil. "
                               (seq-find (lambda (lr) (string= (plist-get lr :externalId) id))
                                         (plist-get tsk :linkedResources))
                               ) ms-tasks)))
-    (if nil ;;ms-task
-        (message "Task with ID %s already exists in MS TODO" id)
-      (progn
-        
-        ;;(format-time-string "%Y-%m-%dT%H:%M:%S" (org-timestamp-to-time (plist-get task :DEADLINE)))
+    (if ms-task
+        (progn
+          (message "Task with org ID %s already exists in MS TODO" id)
+          ;; if either side is DONE, update the other side if not already DONE
+          ;; org-task :todo-type will be 'todo or 'done, user-defined keywords automatically grouped
+          (message "====> %s" (plist-get ms-task :status) (string= (plist-get ms-task :status) "completed"))
 
-        ;; https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0
-        (org-ms-todo--ms-create-task emacs-list-id title id
-                                     (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
-                                     (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
-                                     "Africa/Johannesburg")
-        (message "Create new task with title %s" title))
+          ;; if org-task is DONE, but ms-task is not, update ms-task
+          (if (eq (plist-get task :todo-type) 'done)
+              (unless (eq (plist-get ms-task :status) "completed")
+                (message "Update MS to-do with org ID %s to completed" id)
+                (org-ms-todo--ms-update-task emacs-list-id (plist-get ms-task :id) 'completed (org-ms-todo--org-timestamp-to-iso (plist-get task :closed)) "Africa/Johannesburg"))
+            ;; org-task is in todo state; if ms-task is done, update org-task to done
+            (when (string= (plist-get ms-task :status) "completed")
+              ;; change org-task to done
+              (message "Queueing update of org task with ID %s to DONE" id)
+              ;; need org-id, but also completedDateTime
+              (append org-ms-todo--queue-done (list id))
+
+
+              )
+
+            ))
+
+      (progn
+        ;; only when the org-task is still in todo state do we create the ms to-do
+        (when (eq (plist-get task :todo-type) 'todo)
+          ;; https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0
+          (org-ms-todo--ms-create-task emacs-list-id title id
+                                       (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
+                                       (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
+                                       "Africa/Johannesburg")
+          (message "Create new task with title %s" title)))
 
       )))
+
+;; this returns a list of alists
+;; note that we're in sync mode, so after this we have the data
+(setq ms-tasks nil)
+(org-ms-todo--ms-list-tasks emacs-list-id)
+
+;; get list of org agenda TODOs and DONEs
+;; https://github.com/alphapapa/org-ql/blob/master/examples.org
+;; org-ql-search is interactive
+(setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
+
+(setq org-ms-todo--queue-done nil)
 
 (org-ms-todo--handle-org-task (car org-tasks))
