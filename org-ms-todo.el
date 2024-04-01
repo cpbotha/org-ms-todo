@@ -113,6 +113,27 @@
               (lambda (&key data &allow-other-keys)
                 (message "Created task: %S" data)))))
 
+;; https://learn.microsoft.com/en-us/graph/api/todotask-update?view=graph-rest-1.0&tabs=http
+;; status: notStarted, inProgress, completed, waitingOnOthers, deferred
+(defun org-ms-todo--ms-update-task (ms-list-id ms-task-id status completed-datetime timezone)
+  (setq update-data-json (json-encode
+                          (append
+                           `(("status" . ,status))
+                           ;; :completedDateTime (:dateTime 2024-04-01T22:00:00.0000000 :timeZone UTC) 
+                           (when completed-datetime `(("completedDateTime" . ((dateTime . ,completed-datetime) (timeZone . ,timezone )))))
+                           nil)))
+  (message "Update task with: %s" create-data-json)
+  (request
+    (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks/%s" ms-list-id ms-task-id)
+    :type "PATCH"
+    :headers `(("Content-Type" . "application/json") 
+               ("Authorization" . ,(format "Bearer %s" access-token)))
+    :data update-data-json
+    :parser 'json-read
+    :success (cl-function
+              (lambda (&key data &allow-other-keys)
+                (message "Updated task: %S" data)))))
+
 (defun org-ms-todo--ms-list-tasks (list-id)
   (request
     (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" list-id)
