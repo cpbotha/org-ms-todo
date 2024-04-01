@@ -1,3 +1,15 @@
+;; org-ms-todo.el -- sync your org-mode tasks with Microsoft To-Do
+
+;; Copyright (C) 2024 Charl P. Botha
+
+;; Author: Charl P. Botha <cpbotha@vxlabs.com>
+;; Version: 1.0
+;; Package-Requires: ((oauth2-auto "xxx")(org-ql "xxx"))
+;; Keywords: org, tasks, microsoft, todo
+;; URL: https://github.com/cpbotha/org-ms-todo
+
+;; THIS IS A WORK IN PROGRESS as of 2024-04-01
+
 ;; https://learn.microsoft.com/en-us/graph/auth-v2-user?tabs=http
 ;; https://learn.microsoft.com/en-us/graph/api/todotasklist-list-tasks?view=graph-rest-1.0&tabs=http
 
