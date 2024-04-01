@@ -10,6 +10,12 @@
 
 ;; THIS IS A WORK IN PROGRESS as of 2024-04-01
 
+;; TODO:
+;; - [X] when org task is DONE, update MS task to DONE
+;; - [ ] when MS task is DONE, update org task to DONE
+;; - [ ] Consider also setting the body of the MS to-do
+;; - [ ] Bundle the instructions at the end into org-ms-todo-sync function
+
 ;; https://learn.microsoft.com/en-us/graph/auth-v2-user?tabs=http
 ;; https://learn.microsoft.com/en-us/graph/api/todotasklist-list-tasks?view=graph-rest-1.0&tabs=http
 
