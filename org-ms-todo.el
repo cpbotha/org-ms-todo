@@ -37,6 +37,7 @@
 ;; TODO: move to init
 (setq plstore-encrypt-to "0xE77A4564")
 
+(setq emacs-list-id  "AQMkADAwATM3ZmYAZS0wMjRiLTg5YTQtMDACLTAwCgAuAAADJ6bSE4UnyEaAs4sDMsoQdgEAd96ZmABYYkKEE5goOL-SRQAGhuyhVAAAAA==")
 ;; end of temporary setup ---------------------------------------------------
 
 
@@ -99,7 +100,6 @@
 ;; use this to get the ID of the list you want to use, in my case "emacs ..."
 ;;(org-ms-todo--ms-list-task-lists)
 
-(setq emacs-list-id  "AQMkADAwATM3ZmYAZS0wMjRiLTg5YTQtMDACLTAwCgAuAAADJ6bSE4UnyEaAs4sDMsoQdgEAd96ZmABYYkKEE5goOL-SRQAGhuyhVAAAAA==")
 
 ;; create a new task inside the emacs list
 (defun org-ms-todo--ms-create-task (ms-list-id title org-id due-datetime scheduled-datetime timezone)
@@ -168,7 +168,6 @@
                 (setq ms-tasks (append (plist-get data :value) nil))
                 (message "Got task lists: %S" data)))))
 
-(message "%s" (car org-tasks))
 ;; example using org-ql-query
 ;;https://github.com/alphapapa/org-ql/blob/master/examples.org#listing-bills-coming-due
 ;; org-ql-select could also be used for this
@@ -218,8 +217,8 @@ If ORG-TIMESTAMP is nil, return nil. "
               ;; convert completedDateTime dateTime (iso formatted) to org timestamp
               ;; :completedDateTime (:dateTime "2024-03-21T22:00:00.0000000" :timeZone "UTC")
               ;; FIXME: we assume that :timeZone is UTC, and as if that was not bad enough, we actually just ignore it and use the time as is
-              ;; store both org-id and completed timestamp in the queue
-              (push `(,id ,(org-timestamp-from-time (parse-iso8601-time-string (plist-get (plist-get ms-task :completedDateTime) :dateTime)) t t)) org-ms-todo--queue-done)
+              ;; store both org-id and completed timestamp (as lisp timestamp) in the queue
+              (push `(,id ,(parse-iso8601-time-string (plist-get (plist-get ms-task :completedDateTime) :dateTime))) org-ms-todo--queue-done)
 
 
               )
@@ -238,23 +237,35 @@ If ORG-TIMESTAMP is nil, return nil. "
 
       )))
 
-;; this returns a list of alists
-;; note that we're in sync mode, so after this we have the data
-(setq ms-tasks nil)
-(org-ms-todo--ms-list-tasks emacs-list-id)
 
-;; get list of org agenda TODOs and DONEs
-;; https://github.com/alphapapa/org-ql/blob/master/examples.org
-;; org-ql-search is interactive
-(setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
+(defun org-ms-todo-sync()
+  
+  ;; this returns a list of alists
+  ;; note that we're in sync mode, so after this we have the data
+  (setq ms-tasks nil)
+  (org-ms-todo--ms-list-tasks emacs-list-id)
 
-(setq org-ms-todo--queue-done nil)
+  ;; get list of org agenda TODOs and DONEs
+  ;; https://github.com/alphapapa/org-ql/blob/master/examples.org
+  ;; org-ql-search is interactive
+  (setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
 
-(org-ms-todo--handle-org-task (car org-tasks))
+  (setq org-ms-todo--queue-done nil)
+  (org-ms-todo--handle-org-task (car org-tasks))
 
-;; NEXT:
-;; https://github.com/alphapapa/org-ql/blob/master/examples.org#set-tags-on-certain-entries
-(org-ql-select (org-agenda-files) '(and (property "ID")
-                                        (or (todo) (done))
-                                        (string-match  "F2997669-5478-4D72-BA52-4A36F3305773" (org-entry-get (point) "ID"))))
+  ;; now we have a list of org tasks that need to be updated to DONE
+  ;; https://github.com/alphapapa/org-ql/blob/master/examples.org#set-tags-on-certain-entries
+  (mapc (lambda (id-ts)
+          (org-ql-select (org-agenda-files) '(and (property "ID")
+                                                  (or (todo) (done))
+                                                  (string-match  (car id-ts) (org-entry-get (point) "ID")))
+            :action '(progn
+                       ;; toggle to DONE
+                       (org-todo 'done)
+                       ;; set CLOSED special property to what we received from ms todo
+                       (org-add-planning-info 'closed (car (cdr id-ts))))))
 
+        org-ms-todo--queue-done)
+  
+
+  )
