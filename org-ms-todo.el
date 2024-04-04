@@ -120,7 +120,7 @@
                                                            ("webUrl" . ,(format "org-protocol://org-id?id=%s" org-id))
                                                            ))))
                            nil)))
-  (message "Create task with: %s" create-data-json)
+  ;; (message "Create task with: %s" create-data-json)
   (request
     (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" ms-list-id)
     :type "POST"
@@ -259,6 +259,8 @@ If ORG-TIMESTAMP is nil, return nil. "
       )))
 
 
+;; if you have many TODO tasks that are going to sync, this could give you 429 errors
+;; just re-run
 (defun org-ms-todo-sync()
 
   (interactive)
@@ -268,6 +270,7 @@ If ORG-TIMESTAMP is nil, return nil. "
   
   ;; this returns a list of alists
   ;; note that we're in sync mode, so after this we have the data
+  ;; FIXME: pass ms-tasks in as a parameter
   (setq ms-tasks nil)
   (org-ms-todo--ms-list-tasks emacs-list-id)
 
@@ -276,8 +279,9 @@ If ORG-TIMESTAMP is nil, return nil. "
   ;; org-ql-search is interactive
   (setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
 
+  ;; FIXME: pass queue in as a parameter
   (setq org-ms-todo--queue-done nil)
-  (org-ms-todo--handle-org-task (car org-tasks))
+  (mapc (lambda (org-task) (org-ms-todo--handle-org-task org-task)) org-tasks)
 
   ;; now we have a list of org tasks that need to be updated to DONE
   ;; https://github.com/alphapapa/org-ql/blob/master/examples.org#set-tags-on-certain-entries
