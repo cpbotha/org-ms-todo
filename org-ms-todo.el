@@ -12,9 +12,11 @@
 
 ;; TODO:
 ;; - [X] when org task is DONE, update MS task to DONE
-;; - [ ] when MS task is DONE, update org task to DONE
+;; - [X] when MS task is DONE, update org task to DONE
 ;; - [ ] Consider also setting the body of the MS to-do
-;; - [ ] Bundle the instructions at the end into org-ms-todo-sync function
+;; - [X] Consider setting tags via ms todo hashtags
+;; - [X] Bundle the instructions at the end into org-ms-todo-sync function
+;; - [ ] Retrieve MS list id based on the list name "Emacs Org" (conifgurable)
 
 ;; https://learn.microsoft.com/en-us/graph/auth-v2-user?tabs=http
 ;; https://learn.microsoft.com/en-us/graph/api/todotasklist-list-tasks?view=graph-rest-1.0&tabs=http
@@ -38,6 +40,7 @@
 (setq plstore-encrypt-to "0xE77A4564")
 
 (setq emacs-list-id  "AQMkADAwATM3ZmYAZS0wMjRiLTg5YTQtMDACLTAwCgAuAAADJ6bSE4UnyEaAs4sDMsoQdgEAd96ZmABYYkKEE5goOL-SRQAGhuyhVAAAAA==")
+
 ;; end of temporary setup ---------------------------------------------------
 
 
@@ -67,8 +70,6 @@
          (client_id . ,oauth2-auto-microsoft-client-id)
          )))
 
-;; this will give you just the access-token 
-(setq access-token (oauth2-auto-access-token-sync "cpbotha@vxlabs.com" 'microsoft-todo))
 
 ;; if you also want the refresh-token, use the following instead:
 ;;(setq ms-auth (oauth2-auto-plist-sync "cpbotha@vxlabs.com" 'microsoft-todo))
@@ -229,16 +230,41 @@ If ORG-TIMESTAMP is nil, return nil. "
         ;; only when the org-task is still in todo state do we create the ms to-do
         (when (eq (plist-get task :todo-type) 'todo)
           ;; https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0
-          (org-ms-todo--ms-create-task emacs-list-id title id
-                                       (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
-                                       (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
-                                       "Africa/Johannesburg")
-          (message "Create new task with title %s" title)))
+
+
+          ;; https://orgmode.org/worg/dev/org-element-api.html
+          ;; :tags should be a list of strings
+          ;; instead I am getting a cons
+          ;; (org-element-property :tags (car org-tasks)) gives me the same problem
+          ;; the following does work
+          (mapconcat (lambda (tag)
+                       (concat "#" (substring-no-properties tag)))
+                     (org-element-property :tags (car org-tasks)) " ")
+
+
+          ;; according to https://orgmode.org/worg/dev/org-element-api.html
+          ;; :tags should be a list of strings, but I have to do this extra dance
+          ;; to get out just the tag strings
+          (let ((hashtags (mapconcat (lambda (tag)
+                                       (concat "#" (substring-no-properties tag)))
+                                     (org-element-property :tags (car org-tasks)) " ")))
+            (org-ms-todo--ms-create-task emacs-list-id
+                                         (concat title (when hashtags " ") hashtags) 
+                                         id
+                                         (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
+                                         (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
+                                         "Africa/Johannesburg")
+            (message "Create new task with title %s" title))))
 
       )))
 
 
 (defun org-ms-todo-sync()
+
+  (interactive)
+  ;; this will give you just the access-token 
+  (setq access-token (oauth2-auto-access-token-sync "cpbotha@vxlabs.com" 'microsoft-todo))
+
   
   ;; this returns a list of alists
   ;; note that we're in sync mode, so after this we have the data
@@ -266,6 +292,7 @@ If ORG-TIMESTAMP is nil, return nil. "
                        (org-add-planning-info 'closed (car (cdr id-ts))))))
 
         org-ms-todo--queue-done)
-  
+
+
 
   )
