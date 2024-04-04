@@ -13,7 +13,7 @@
 ;; TODO:
 ;; - [X] when org task is DONE, update MS task to DONE
 ;; - [X] when MS task is DONE, update org task to DONE
-;; - [ ] Consider also setting the body of the MS to-do
+;; - [X] Consider also setting the body of the MS to-do
 ;; - [X] Consider setting tags via ms todo hashtags
 ;; - [X] Bundle the instructions at the end into org-ms-todo-sync function
 ;; - [ ] Retrieve MS list id based on the list name "Emacs Org" (conifgurable)
@@ -103,7 +103,7 @@
 
 
 ;; create a new task inside the emacs list
-(defun org-ms-todo--ms-create-task (ms-list-id title org-id due-datetime scheduled-datetime timezone)
+(defun org-ms-todo--ms-create-task (ms-list-id title body-html org-id due-datetime scheduled-datetime timezone)
   (setq create-data-json (json-encode
                           ;; use append so that optional fields can be nil, and then are completely excluded from the alist
                           (append
@@ -113,6 +113,7 @@
                              `((dueDateTime . ((dateTime . ,due-datetime) (timeZone . ,timezone )))))
                            (when scheduled-datetime
                              `((startDateTime . ((dateTime . ,scheduled-datetime) (timeZone . ,timezone )))))
+                           (when body-html `((body . ((contentType . "html") (content . ,body-html)))))
                            `(("linkedResources" . ,(list `(("applicationName" . "Emacs Orgmode") 
                                                            ;; add org-protocol link here as well, because to-do web-app does not link or even reveal the webUrl
                                                            ("displayName" . ,(format "org-protocol://org-id?id=%s" org-id))
@@ -120,12 +121,14 @@
                                                            ("webUrl" . ,(format "org-protocol://org-id?id=%s" org-id))
                                                            ))))
                            nil)))
-  ;; (message "Create task with: %s" create-data-json)
+  (message "Create task with: %s" create-data-json)
   (request
     (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" ms-list-id)
     :type "POST"
     :headers `(("Content-Type" . "application/json") 
-               ("Authorization" . ,(format "Bearer %s" access-token)))
+               ("Authorization" . ,(format "Bearer %s" access-token))
+               ;; prefer header required, else HTML stripped from html body
+               ("Prefer". "outlook.body-content-type='html'"))
     :data create-data-json
     :parser 'json-read
     :success (cl-function
@@ -158,7 +161,8 @@
     (format "https://graph.microsoft.com/v1.0/me/todo/lists/%s/tasks" list-id)
     :type "GET"
     :sync t
-    :headers `(("Authorization" . ,(format "Bearer %s" access-token)))
+    :headers `(("Authorization" . ,(format "Bearer %s" access-token))
+               ("Prefer". "outlook.body-content-type='html'"))
     ;; json-read by default gives alists
     ;; here we wrap it to give plist, as per docs
     :parser (lambda ()
@@ -189,11 +193,13 @@
 If ORG-TIMESTAMP is nil, return nil. "
   (when org-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S" (org-timestamp-to-time org-timestamp))))
 
+
 ;; this task is an org-element
 (defun org-ms-todo--handle-org-task (task-oe)
   (let* ((task (car (cdr task-oe)))
          (id (plist-get task :ID))
          (title (plist-get task :raw-value))
+         (body-html (plist-get task :body-html))
          (ms-task (seq-find (lambda (tsk)
                               ;; does plist-get tsk :linkedResources contain :externalId == id
                               (seq-find (lambda (lr) (string= (plist-get lr :externalId) id))
@@ -229,19 +235,6 @@ If ORG-TIMESTAMP is nil, return nil. "
       (progn
         ;; only when the org-task is still in todo state do we create the ms to-do
         (when (eq (plist-get task :todo-type) 'todo)
-          ;; https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0
-
-
-          ;; https://orgmode.org/worg/dev/org-element-api.html
-          ;; :tags should be a list of strings
-          ;; instead I am getting a cons
-          ;; (org-element-property :tags (car org-tasks)) gives me the same problem
-          ;; the following does work
-          (mapconcat (lambda (tag)
-                       (concat "#" (substring-no-properties tag)))
-                     (org-element-property :tags (car org-tasks)) " ")
-
-
           ;; according to https://orgmode.org/worg/dev/org-element-api.html
           ;; :tags should be a list of strings, but I have to do this extra dance
           ;; to get out just the tag strings
@@ -250,6 +243,7 @@ If ORG-TIMESTAMP is nil, return nil. "
                                      (org-element-property :tags (car org-tasks)) " ")))
             (org-ms-todo--ms-create-task emacs-list-id
                                          (concat title (when hashtags " ") hashtags) 
+                                         body-html
                                          id
                                          (org-ms-todo--org-timestamp-to-iso (plist-get task :deadline))
                                          (org-ms-todo--org-timestamp-to-iso (plist-get task :scheduled))
@@ -257,6 +251,20 @@ If ORG-TIMESTAMP is nil, return nil. "
             (message "Create new task with title %s" title))))
 
       )))
+
+;; heading is an org-element (heading (:raw-value ...))
+;; this function will only work during org-ql-select, when the relevant buffer is current!
+(defun org-ms-todo--body-to-html (heading)
+  "Extract body of org HEADING element and convert to HTML."
+  ;; robust-* skips the scheduling line and the properties drawer
+  ;; logbook will be included however
+  (let* ((beg (org-element-property :robust-begin heading))
+         (end (org-element-property :robust-end heading))
+         (body (when (and beg end) (buffer-substring-no-properties beg end)))
+         (body-html (when body (org-export-string-as
+                                body
+                                'html t '(:with-toc nil :with-tags nil)))))
+    body-html))
 
 
 ;; if you have many TODO tasks that are going to sync, this could give you 429 errors
@@ -277,11 +285,24 @@ If ORG-TIMESTAMP is nil, return nil. "
   ;; get list of org agenda TODOs and DONEs
   ;; https://github.com/alphapapa/org-ql/blob/master/examples.org
   ;; org-ql-search is interactive
-  (setq org-tasks (org-ql-select (org-agenda-files) '(and (property "ID") (or (todo) (done)))))
+
+  ;; when we parse tasks, we also extract the body as HTML
+  ;; easier to do it during this loop when the relevant buffer is current
+  (setq org-tasks
+        (org-ql-select
+          (org-agenda-files)
+          '(and (property "ID") (or (todo) (done)))
+          :action
+          '(let* ((hl (org-element-headline-parser))
+                  (body-html (org-ms-todo--body-to-html hl)))
+             (when body-html (org-element-put-property hl :body-html (org-ms-todo--body-to-html hl)))
+             hl)))
 
   ;; FIXME: pass queue in as a parameter
   (setq org-ms-todo--queue-done nil)
   (mapc (lambda (org-task) (org-ms-todo--handle-org-task org-task)) org-tasks)
+  ;; DEBUG: only do the first one
+  ;; (org-ms-todo--handle-org-task (car org-tasks))
 
   ;; now we have a list of org tasks that need to be updated to DONE
   ;; https://github.com/alphapapa/org-ql/blob/master/examples.org#set-tags-on-certain-entries
