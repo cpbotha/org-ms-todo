@@ -209,9 +209,8 @@ If ORG-TIMESTAMP is nil, return nil. "
         (progn
           (message "Task with org ID %s already exists in MS TODO" id)
           ;; if either side is DONE, update the other side if not already DONE
-          ;; org-task :todo-type will be 'todo or 'done, user-defined keywords automatically grouped
-          (message "====> %s" (plist-get ms-task :status) (string= (plist-get ms-task :status) "completed"))
 
+          ;; org-task :todo-type will be 'todo or 'done, user-defined keywords automatically grouped
           ;; if org-task is DONE, but ms-task is not, update ms-task
           (if (eq (plist-get task :todo-type) 'done)
               (unless (eq (plist-get ms-task :status) "completed")
@@ -225,14 +224,10 @@ If ORG-TIMESTAMP is nil, return nil. "
               ;; :completedDateTime (:dateTime "2024-03-21T22:00:00.0000000" :timeZone "UTC")
               ;; FIXME: we assume that :timeZone is UTC, and as if that was not bad enough, we actually just ignore it and use the time as is
               ;; store both org-id and completed timestamp (as lisp timestamp) in the queue
-              (push `(,id ,(parse-iso8601-time-string (plist-get (plist-get ms-task :completedDateTime) :dateTime))) org-ms-todo--queue-done)
-
-
-              )
-
-            ))
+              (push `(,id ,(parse-iso8601-time-string (plist-get (plist-get ms-task :completedDateTime) :dateTime))) org-ms-todo--queue-done))))
 
       (progn
+        ;; we have org-task, but no corresponding ms-task
         ;; only when the org-task is still in todo state do we create the ms to-do
         (when (eq (plist-get task :todo-type) 'todo)
           ;; according to https://orgmode.org/worg/dev/org-element-api.html
@@ -272,9 +267,9 @@ If ORG-TIMESTAMP is nil, return nil. "
 (defun org-ms-todo-sync()
 
   (interactive)
+
   ;; this will give you just the access-token 
   (setq access-token (oauth2-auto-access-token-sync "cpbotha@vxlabs.com" 'microsoft-todo))
-
   
   ;; this returns a list of alists
   ;; note that we're in sync mode, so after this we have the data
