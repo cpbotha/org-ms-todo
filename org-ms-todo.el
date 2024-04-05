@@ -8,15 +8,15 @@
 ;; Keywords: org, tasks, microsoft, todo
 ;; URL: https://github.com/cpbotha/org-ms-todo
 
-;; THIS IS A WORK IN PROGRESS as of 2024-04-01
-
 ;; TODO:
 ;; - [X] when org task is DONE, update MS task to DONE
 ;; - [X] when MS task is DONE, update org task to DONE
 ;; - [X] Consider also setting the body of the MS to-do
 ;; - [X] Consider setting tags via ms todo hashtags
 ;; - [X] Bundle the instructions at the end into org-ms-todo-sync function
+;; - [ ] Only do HTML export when that task is actually going to be created on the MS side
 ;; - [ ] Retrieve MS list id based on the list name "Emacs Org" (conifgurable)
+;; - [ ] Consider creating new org-mode tasks from MS to-dos in the correct group
 
 ;; https://learn.microsoft.com/en-us/graph/auth-v2-user?tabs=http
 ;; https://learn.microsoft.com/en-us/graph/api/todotasklist-list-tasks?view=graph-rest-1.0&tabs=http
