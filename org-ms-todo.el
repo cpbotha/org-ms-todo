@@ -14,7 +14,7 @@
 ;; - [X] Consider also setting the body of the MS to-do
 ;; - [X] Consider setting tags via ms todo hashtags
 ;; - [X] Bundle the instructions at the end into org-ms-todo-sync function
-;; - [ ] Only do HTML export when that task is actually going to be created on the MS side
+;; - [X] Only do HTML export when that task is actually going to be created on the MS side
 ;; - [ ] Retrieve MS list id based on the list name "Emacs Org" (conifgurable)
 ;; - [ ] Consider creating new org-mode tasks from MS to-dos in the correct group
 
@@ -171,7 +171,9 @@
     :success (cl-function
               (lambda (&key data &allow-other-keys)
                 (setq ms-tasks (append (plist-get data :value) nil))
-                (message "Got task lists: %S" data)))))
+                ;; DEBUG
+                ;; (message "Got task lists: %S" data)
+                ))))
 
 ;; example using org-ql-query
 ;;https://github.com/alphapapa/org-ql/blob/master/examples.org#listing-bills-coming-due
@@ -199,7 +201,6 @@ If ORG-TIMESTAMP is nil, return nil. "
   (let* ((task (car (cdr task-oe)))
          (id (plist-get task :ID))
          (title (plist-get task :raw-value))
-         (body-html (plist-get task :body-html))
          (ms-task (seq-find (lambda (tsk)
                               ;; does plist-get tsk :linkedResources contain :externalId == id
                               (seq-find (lambda (lr) (string= (plist-get lr :externalId) id))
@@ -235,7 +236,9 @@ If ORG-TIMESTAMP is nil, return nil. "
           ;; to get out just the tag strings
           (let ((hashtags (mapconcat (lambda (tag)
                                        (concat "#" (substring-no-properties tag)))
-                                     (org-element-property :tags (car org-tasks)) " ")))
+                                     (org-element-property :tags (car org-tasks)) " "))
+                (body-html (with-current-buffer (plist-get task :element-buffer)
+                             (org-ms-todo--body-to-html task-oe))))
             (org-ms-todo--ms-create-task emacs-list-id
                                          (concat title (when hashtags " ") hashtags) 
                                          body-html
@@ -281,16 +284,15 @@ If ORG-TIMESTAMP is nil, return nil. "
   ;; https://github.com/alphapapa/org-ql/blob/master/examples.org
   ;; org-ql-search is interactive
 
-  ;; when we parse tasks, we also extract the body as HTML
-  ;; easier to do it during this loop when the relevant buffer is current
+  ;; when we parse tasks, we also store each task's buffer in the task itself
+  ;; we might need this later if we need to access the task's body (for HTML export)
   (setq org-tasks
         (org-ql-select
           (org-agenda-files)
           '(and (property "ID") (or (todo) (done)))
           :action
-          '(let* ((hl (org-element-headline-parser))
-                  (body-html (org-ms-todo--body-to-html hl)))
-             (when body-html (org-element-put-property hl :body-html (org-ms-todo--body-to-html hl)))
+          '(let* ((hl (org-element-headline-parser)))
+             (org-element-put-property hl :element-buffer (current-buffer))
              hl)))
 
   ;; FIXME: pass queue in as a parameter
