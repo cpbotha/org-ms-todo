@@ -214,7 +214,7 @@ If ORG-TIMESTAMP is nil, return nil. "
           ;; org-task :todo-type will be 'todo or 'done, user-defined keywords automatically grouped
           ;; if org-task is DONE, but ms-task is not, update ms-task
           (if (eq (plist-get task :todo-type) 'done)
-              (unless (eq (plist-get ms-task :status) "completed")
+              (unless (string= (plist-get ms-task :status) "completed")
                 (message "Update MS to-do with org ID %s to completed" id)
                 (org-ms-todo--ms-update-task emacs-list-id (plist-get ms-task :id) 'completed (org-ms-todo--org-timestamp-to-iso (plist-get task :closed)) "Africa/Johannesburg"))
             ;; org-task is in todo state; if ms-task is done, update org-task to done
